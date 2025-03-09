@@ -48,3 +48,8 @@ func ConnectDB() *mongo.Client {
 
 	return client
 }
+
+// GetCollection returns a MongoDB collection
+func GetCollection(collectionName string) *mongo.Collection {
+	return DB.Database("prepportal").Collection(collectionName)
+}
