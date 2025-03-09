@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/tr-choudhury21/prepportal_backend/controllers"
+	"github.com/tr-choudhury21/prepportal_backend/middleware"
 )
 
 func AuthRoutes(router *gin.Engine) {
@@ -11,5 +12,6 @@ func AuthRoutes(router *gin.Engine) {
 	{
 		auth.POST("/register", controllers.Signup)
 		auth.POST("/login", controllers.Login)
+		auth.GET("/profile", middleware.AuthMiddleware(), controllers.GetUserProfile)
 	}
 }

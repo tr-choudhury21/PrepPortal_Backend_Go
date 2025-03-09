@@ -113,3 +113,31 @@ func Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": token})
 }
+
+// GetUserProfile retrieves the authenticated user's profile
+func GetUserProfile(c *gin.Context) {
+	// Extract user email from context
+	userEmail, exists := c.Get("userEmail")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Find user in the database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var user models.User
+	err := userCollection.FindOne(ctx, bson.M{"email": userEmail}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Return user profile
+	c.JSON(http.StatusOK, gin.H{
+		"id":        user.ID.Hex(),
+		"fullName":  user.FullName,
+		"email":     user.Email,
+		"createdAt": user.CreatedAt,
+	})
+}
