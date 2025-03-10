@@ -28,6 +28,7 @@ func main() {
 
 	//routes
 	routes.AuthRoutes(router)
+	routes.DocumentRoutes(router)
 
 	port := os.Getenv("PORT")
 	if port == "" {
