@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tr-choudhury21/prepportal_backend/config"
 	"github.com/tr-choudhury21/prepportal_backend/models"
+	"github.com/tr-choudhury21/prepportal_backend/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -15,26 +16,52 @@ import (
 var documentCollection = config.GetCollection("documents")
 
 func CreateDocument(c *gin.Context) {
-	var doc models.Document
-	if err := c.BindJSON(&doc); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-		return
-	}
-
-	doc.ID = primitive.NewObjectID()
-	doc.CreatedAt = time.Now()
-	doc.UpdatedAt = time.Now()
-
-	_, err := documentCollection.InsertOne(context.TODO(), doc)
+	// Parse form data
+	err := c.Request.ParseMultipartForm(10 << 20) // 10 MB max file size
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save document"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Document created successfully",
-		"document": doc,
-	})
+	// Extract file from the request
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File upload failed"})
+		return
+	}
+	defer file.Close()
+
+	// Upload file to Cloudinary
+	fileURL, err := utils.UploadFile(file, header.Filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not upload file"})
+		return
+	}
+
+	// Create document instance
+	doc := models.Document{
+		ID:         primitive.NewObjectID(),
+		Subject:    c.PostForm("subject"),
+		Semester:   c.PostForm("semester"),
+		Year:       c.PostForm("year"),
+		Branch:     c.PostForm("branch"),
+		Content:    c.PostForm("content"),
+		FileUrl:    fileURL,
+		FileName:   header.Filename,
+		UploadedBy: c.PostForm("uploadedBy"),
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	// Insert document into MongoDB
+	_, err = documentCollection.InsertOne(context.TODO(), doc)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save document"})
+		return
+	}
+
+	// Send success response
+	c.JSON(http.StatusCreated, gin.H{"message": "Document uploaded successfully", "document": doc})
 }
 
 //get all docs
