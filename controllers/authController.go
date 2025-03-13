@@ -85,7 +85,7 @@ func Signup(c *gin.Context) {
 	}
 
 	// Generate JWT Token (Now using utils package)
-	token, err := utils.GenerateToken(user.Email)
+	token, err := utils.GenerateToken(user.Email, user.FullName, user.ID.Hex())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
 		return
@@ -126,7 +126,7 @@ func Login(c *gin.Context) {
 	}
 
 	// Generate JWT Token (Now using utils package)
-	token, err := utils.GenerateToken(user.Email)
+	token, err := utils.GenerateToken(user.Email, user.FullName, user.ID.Hex())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
 		return

@@ -9,15 +9,19 @@ import (
 )
 
 type Claims struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
+	FullName string `json:"fullName"`
+	UserID   string `json:"userID"`
 	jwt.StandardClaims
 }
 
-func GenerateToken(email string) (string, error) {
+func GenerateToken(email, fullName, userID string) (string, error) {
 
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		Email: email,
+		Email:    email,
+		FullName: fullName,
+		UserID:   userID,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

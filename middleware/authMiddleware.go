@@ -45,6 +45,8 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Store user email in the context
 		c.Set("userEmail", claims.Email)
+		c.Set("fullName", claims.FullName) // Ensure this is set correctly
+		c.Set("userID", claims.UserID)     // Store user ID if needed
 
 		// Continue to the next middleware/handler
 		c.Next()

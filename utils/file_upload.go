@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime/multipart"
 
@@ -10,6 +11,11 @@ import (
 )
 
 func UploadFile(file multipart.File, fileName string) (string, error) {
+
+	if config.CLD == nil {
+		return "", errors.New("Cloudinary is not initialized")
+	}
+
 	ctx := context.Background()
 
 	// Upload the file to Cloudinary
