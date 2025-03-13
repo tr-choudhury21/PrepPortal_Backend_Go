@@ -3,27 +3,46 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tr-choudhury21/prepportal_backend/config"
 	"github.com/tr-choudhury21/prepportal_backend/models"
 	"github.com/tr-choudhury21/prepportal_backend/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var documentCollection = config.GetCollection("documents")
+var (
+	documentCollection *mongo.Collection
+	documentOnce       sync.Once
+)
+
+func getDocumentCollection() *mongo.Collection {
+	documentOnce.Do(func() {
+		documentCollection = config.GetCollection("documents")
+	})
+	return documentCollection
+}
 
 func CreateDocument(c *gin.Context) {
-	// Parse form data
-	err := c.Request.ParseMultipartForm(10 << 20) // 10 MB max file size
+
+	documentCollection := getDocumentCollection()
+	if documentCollection == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is not initialized"})
+		return
+	}
+
+	// Parse form data (Limit: 10 MB)
+	err := c.Request.ParseMultipartForm(10 << 20)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large"})
 		return
 	}
 
-	// Extract file from the request
+	// Extract file from request
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File upload failed"})
@@ -53,20 +72,25 @@ func CreateDocument(c *gin.Context) {
 		UpdatedAt:  time.Now(),
 	}
 
-	// Insert document into MongoDB
+	// Insert into MongoDB
 	_, err = documentCollection.InsertOne(context.TODO(), doc)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save document"})
 		return
 	}
 
-	// Send success response
 	c.JSON(http.StatusCreated, gin.H{"message": "Document uploaded successfully", "document": doc})
 }
 
-//get all docs
-
+// Get All Documents
 func GetAllDocuments(c *gin.Context) {
+
+	documentCollection := getDocumentCollection()
+	if documentCollection == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is not initialized"})
+		return
+	}
+
 	cursor, err := documentCollection.Find(context.TODO(), bson.M{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch documents"})
@@ -77,7 +101,10 @@ func GetAllDocuments(c *gin.Context) {
 	var documents []models.Document
 	for cursor.Next(context.TODO()) {
 		var doc models.Document
-		cursor.Decode(&doc)
+		if err := cursor.Decode(&doc); err != nil { // Handle decode errors
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding document"})
+			return
+		}
 		documents = append(documents, doc)
 	}
 
@@ -86,6 +113,13 @@ func GetAllDocuments(c *gin.Context) {
 
 // Get Documents by Branch
 func GetDocumentsByBranch(c *gin.Context) {
+
+	documentCollection := getDocumentCollection()
+	if documentCollection == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is not initialized"})
+		return
+	}
+
 	branch := c.Param("branch")
 
 	cursor, err := documentCollection.Find(context.TODO(), bson.M{"branch": branch})
@@ -98,7 +132,10 @@ func GetDocumentsByBranch(c *gin.Context) {
 	var documents []models.Document
 	for cursor.Next(context.TODO()) {
 		var doc models.Document
-		cursor.Decode(&doc)
+		if err := cursor.Decode(&doc); err != nil { // Handle decode errors
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding document"})
+			return
+		}
 		documents = append(documents, doc)
 	}
 
@@ -107,8 +144,19 @@ func GetDocumentsByBranch(c *gin.Context) {
 
 // Update Document
 func UpdateDocument(c *gin.Context) {
+
+	documentCollection := getDocumentCollection()
+	if documentCollection == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is not initialized"})
+		return
+	}
+
 	id := c.Param("id")
-	objID, _ := primitive.ObjectIDFromHex(id)
+	objID, err := primitive.ObjectIDFromHex(id) // Validate ID
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document ID"})
+		return
+	}
 
 	var updatedData models.Document
 	if err := c.BindJSON(&updatedData); err != nil {
@@ -119,8 +167,8 @@ func UpdateDocument(c *gin.Context) {
 	updatedData.UpdatedAt = time.Now()
 
 	update := bson.M{"$set": updatedData}
-	_, err := documentCollection.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
-	if err != nil {
+	result, err := documentCollection.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	if err != nil || result.MatchedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not update document"})
 		return
 	}
@@ -130,11 +178,22 @@ func UpdateDocument(c *gin.Context) {
 
 // Delete Document
 func DeleteDocument(c *gin.Context) {
-	id := c.Param("id")
-	objID, _ := primitive.ObjectIDFromHex(id)
 
-	_, err := documentCollection.DeleteOne(context.TODO(), bson.M{"_id": objID})
+	documentCollection := getDocumentCollection()
+	if documentCollection == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is not initialized"})
+		return
+	}
+
+	id := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(id) // Validate ID
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document ID"})
+		return
+	}
+
+	result, err := documentCollection.DeleteOne(context.TODO(), bson.M{"_id": objID})
+	if err != nil || result.DeletedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not delete document"})
 		return
 	}

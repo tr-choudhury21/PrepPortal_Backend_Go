@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,17 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-var userCollection *mongo.Collection = config.GetCollection("users")
+var (
+	userCollection *mongo.Collection
+	once           sync.Once
+)
+
+func getUserCollection() *mongo.Collection {
+	once.Do(func() {
+		userCollection = config.GetCollection("users")
+	})
+	return userCollection
+}
 
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -23,6 +34,8 @@ func HashPassword(password string) (string, error) {
 }
 
 func Signup(c *gin.Context) {
+
+	userCollection := getUserCollection()
 	var user models.User
 
 	// Parse JSON body
@@ -31,6 +44,11 @@ func Signup(c *gin.Context) {
 			"error": "Invalid Request",
 		})
 
+		return
+	}
+
+	if user.FullName == "" || user.Email == "" || user.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "All fields are required"})
 		return
 	}
 
@@ -62,7 +80,7 @@ func Signup(c *gin.Context) {
 	// Insert user into database
 	_, err = userCollection.InsertOne(ctx, user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user", "details": err.Error()})
 		return
 	}
 
@@ -78,6 +96,9 @@ func Signup(c *gin.Context) {
 
 // Login Controller
 func Login(c *gin.Context) {
+
+	userCollection := getUserCollection()
+
 	var credentials struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -116,6 +137,9 @@ func Login(c *gin.Context) {
 
 // GetUserProfile retrieves the authenticated user's profile
 func GetUserProfile(c *gin.Context) {
+
+	userCollection := getUserCollection()
+
 	// Extract user email from context
 	userEmail, exists := c.Get("userEmail")
 	if !exists {

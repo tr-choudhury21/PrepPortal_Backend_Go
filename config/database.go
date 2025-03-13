@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -12,44 +13,52 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var DB *mongo.Client
+var (
+	DB     *mongo.Client
+	once   sync.Once         // Ensures ConnectDB() is only called once
+	dbName = "prepportal_Go" // Define database name globally
+)
 
-func ConnectDB() *mongo.Client {
+// ConnectDB initializes the MongoDB connection (singleton)
+func ConnectDB() {
+	once.Do(func() {
+		err := godotenv.Load()
+		if err != nil {
+			log.Println("⚠️ Warning: .env file not found, using environment variables")
+		}
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+		mongoURI := os.Getenv("MONGO_URI")
+		if mongoURI == "" {
+			log.Fatal("❌ MongoDB URI not found in environment variables")
+		}
 
-	MongoURI := os.Getenv("MONGO_URI")
-	if MongoURI == "" {
-		log.Fatal("MongoDB URL not found!")
-	}
+		fmt.Println("🔗 Connecting to MongoDB at:", mongoURI)
 
-	// Create a context with a timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+		// Create a context with a timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	// Connect to MongoDB using mongo.Connect
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoURI))
-	if err != nil {
-		log.Fatal("Failed to connect to MongoDB:", err)
-	}
+		// Connect to MongoDB
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		if err != nil {
+			log.Fatalf("❌ Failed to connect to MongoDB: %v", err)
+		}
 
-	// Ping the MongoDB server to verify the connection
-	err = client.Ping(ctx, nil)
-	if err != nil {
-		log.Fatal("Failed to ping MongoDB:", err)
-	}
+		// Ping the MongoDB server to verify the connection
+		err = client.Ping(ctx, nil)
+		if err != nil {
+			log.Fatalf("❌ Failed to ping MongoDB: %v", err)
+		}
 
-	fmt.Println("✅ Connected to MongoDB successfully!")
-
-	DB = client
-
-	return client
+		DB = client
+		fmt.Println("✅ Connected to MongoDB successfully!")
+	})
 }
 
-// GetCollection returns a MongoDB collection
+// GetCollection returns a MongoDB collection safely
 func GetCollection(collectionName string) *mongo.Collection {
-	return DB.Database("prepportal").Collection(collectionName)
+	if DB == nil {
+		log.Fatal("❌ MongoDB connection is not initialized. Call ConnectDB() first.")
+	}
+	return DB.Database(dbName).Collection(collectionName)
 }

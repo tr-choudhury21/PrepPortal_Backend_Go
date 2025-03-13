@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -20,9 +19,13 @@ func main() {
 	}
 
 	//connect db
-	client := config.ConnectDB()
-	defer client.Disconnect(context.Background())
-	fmt.Println("MongoDB client connected and ready to use!")
+	config.ConnectDB()
+
+	if config.DB == nil {
+		log.Fatal("❌ MongoDB connection is still nil after calling ConnectDB!")
+	} else {
+		fmt.Println("✅ MongoDB connection is ready.")
+	}
 
 	router := gin.Default()
 
