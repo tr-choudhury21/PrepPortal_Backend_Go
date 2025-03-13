@@ -32,6 +32,8 @@ func main() {
 	//routes
 	routes.AuthRoutes(router)
 	routes.DocumentRoutes(router)
+	routes.QnaRoutes(router)
+	routes.BlogRoutes(router)
 
 	port := os.Getenv("PORT")
 	if port == "" {
