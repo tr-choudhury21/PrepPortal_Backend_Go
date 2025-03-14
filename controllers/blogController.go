@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tr-choudhury21/prepportal_backend/config"
 	"github.com/tr-choudhury21/prepportal_backend/models"
+	"github.com/tr-choudhury21/prepportal_backend/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -47,6 +48,12 @@ func CreateBlog(c *gin.Context) {
 		return
 	}
 
+	// Parse form data (multipart for image upload)
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10MB max file size
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form data"})
+		return
+	}
+
 	var blog models.Blog
 	if err := c.BindJSON(&blog); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -59,6 +66,17 @@ func CreateBlog(c *gin.Context) {
 	blog.AuthorID = user.ID
 	blog.CreatedAt = time.Now()
 	blog.UpdatedAt = time.Now()
+
+	// Handle Image Upload
+	file, fileHeader, err := c.Request.FormFile("image")
+	if err == nil {
+		imageURL, err := utils.UploadImage(file, fileHeader)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload image"})
+			return
+		}
+		blog.ImageURL = imageURL
+	}
 
 	// Insert into DB
 	_, err = blogCollection.InsertOne(context.TODO(), blog)
