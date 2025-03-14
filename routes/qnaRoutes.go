@@ -15,5 +15,7 @@ func QnaRoutes(router *gin.Engine) {
 		//qnaGroup.GET("/paginated", controllers.GetPaginatedQnA)
 		qnaGroup.POST("/vote/:id", middleware.AuthMiddleware(), controllers.VoteQuestion)
 		qnaGroup.POST("/answer/vote/:id", middleware.AuthMiddleware(), controllers.VoteAnswer)
+		qnaGroup.POST("/report/:id", middleware.AuthMiddleware(), controllers.ReportQuestion)
+
 	}
 }

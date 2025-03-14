@@ -257,3 +257,30 @@ func VoteAnswer(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Vote recorded successfully"})
 }
+
+// Report QnA
+func ReportQuestion(c *gin.Context) {
+
+	qnaCollection := getQnaCollection()
+
+	id := c.Param("id")
+	var report models.Report
+
+	if err := c.BindJSON(&report); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report data"})
+		return
+	}
+
+	qID, _ := primitive.ObjectIDFromHex(id)
+	report.CreatedAt = time.Now()
+
+	update := bson.M{"$push": bson.M{"reports": report}}
+	_, err := qnaCollection.UpdateOne(context.TODO(), bson.M{"_id": qID}, update)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to report question"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Report submitted"})
+}
