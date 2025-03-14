@@ -150,6 +150,7 @@ func GetUserProfile(c *gin.Context) {
 	// Find user in the database
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	var user models.User
 	err := userCollection.FindOne(ctx, bson.M{"email": userEmail}).Decode(&user)
 	if err != nil {
@@ -158,10 +159,63 @@ func GetUserProfile(c *gin.Context) {
 	}
 
 	// Return user profile
-	c.JSON(http.StatusOK, gin.H{
-		"id":        user.ID.Hex(),
-		"fullName":  user.FullName,
-		"email":     user.Email,
-		"createdAt": user.CreatedAt,
-	})
+	// c.JSON(http.StatusOK, gin.H{
+	// 	"id":        user.ID.Hex(),
+	// 	"fullName":  user.FullName,
+	// 	"email":     user.Email,
+	// 	"createdAt": user.CreatedAt,
+	// })
+
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+//update profile
+
+func UpdateUserProfile(c *gin.Context) {
+	userCollection := getUserCollection()
+
+	// Get user email from JWT token
+	userEmail, exists := c.Get("userEmail")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Fetch user from DB
+	var user models.User
+	err := userCollection.FindOne(context.TODO(), bson.M{"email": userEmail.(string)}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Parse request body
+	var updateRequest struct {
+		FullName string `json:"fullName,omitempty"`
+		Bio      string `json:"bio,omitempty"`
+	}
+
+	if err := c.BindJSON(&updateRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Prepare update data
+	update := bson.M{}
+	if updateRequest.FullName != "" {
+		update["fullName"] = updateRequest.FullName
+	}
+	if updateRequest.Bio != "" {
+		update["bio"] = updateRequest.Bio
+	}
+	update["updatedAt"] = time.Now()
+
+	// Update user profile
+	_, err = userCollection.UpdateOne(context.TODO(), bson.M{"email": userEmail.(string)}, bson.M{"$set": update})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
 }

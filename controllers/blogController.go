@@ -31,9 +31,19 @@ func GetBlogCollection() *mongo.Collection {
 func CreateBlog(c *gin.Context) {
 
 	blogCollection := GetBlogCollection()
+	userCollection := getUserCollection()
+
 	userEmail, exists := c.Get("userEmail")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	//fetch user details
+	var user models.User
+	err := userCollection.FindOne(context.TODO(), bson.M{"email": userEmail.(string)}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
@@ -46,13 +56,21 @@ func CreateBlog(c *gin.Context) {
 	// Set author details
 	blog.ID = primitive.NewObjectID()
 	blog.Author = userEmail.(string)
+	blog.AuthorID = user.ID
 	blog.CreatedAt = time.Now()
 	blog.UpdatedAt = time.Now()
 
 	// Insert into DB
-	_, err := blogCollection.InsertOne(context.TODO(), blog)
+	_, err = blogCollection.InsertOne(context.TODO(), blog)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving blog"})
+		return
+	}
+
+	// Update user's contributions list
+	_, err = userCollection.UpdateOne(context.TODO(), bson.M{"_id": user.ID}, bson.M{"$push": bson.M{"contributions": blog.ID}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user contributions"})
 		return
 	}
 
