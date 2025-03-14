@@ -27,6 +27,9 @@ func main() {
 		fmt.Println("✅ MongoDB connection is ready.")
 	}
 
+	//connect cloudinary
+	config.InitCloudinary()
+
 	router := gin.Default()
 
 	//routes
