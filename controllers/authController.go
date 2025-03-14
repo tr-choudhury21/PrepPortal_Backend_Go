@@ -12,6 +12,7 @@ import (
 	"github.com/tr-choudhury21/prepportal_backend/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -218,4 +219,16 @@ func UpdateUserProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
+}
+
+//GetLeaderBoard of Contributors
+
+func GetLeaderboard(c *gin.Context) {
+	opts := options.Find().SetSort(bson.M{"reputation": -1}).SetLimit(10)
+	cursor, _ := userCollection.Find(context.TODO(), bson.M{}, opts)
+
+	var users []models.User
+	cursor.All(context.TODO(), &users)
+
+	c.JSON(http.StatusOK, users)
 }
